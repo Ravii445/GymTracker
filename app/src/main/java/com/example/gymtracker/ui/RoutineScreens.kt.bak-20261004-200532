@@ -41,7 +41,6 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
@@ -269,15 +268,15 @@ fun RunRoutineScreen(
     onBack: () -> Unit
 ) {
     var routine by remember { mutableStateOf<RoutineWithExercises?>(null) }
-    val actual = remember { mutableStateMapOf<Long, SnapshotStateList<RunSetDraft>>() }
+    val actual = remember { mutableStateMapOf<Long, MutableList<RunSetDraft>>() }
     var restSeconds by remember { mutableStateOf<Int?>(null) }
 
     LaunchedEffect(routineId) {
         viewModel.getRoutine(routineId) { r ->
             routine = r
             r.exercises.forEach { ex ->
-                actual[ex.id] = mutableStateListOf<RunSetDraft>().apply {
-                    repeat(ex.sets) { add(RunSetDraft(reps = ex.reps, weight = ex.weight)) }
+                actual[ex.id] = MutableList(ex.sets) {
+                    RunSetDraft(reps = ex.reps, weight = ex.weight)
                 }
             }
         }
@@ -316,7 +315,7 @@ fun RunRoutineScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(r.exercises, key = { it.id }) { ex ->
-                    val drafts = actual.getOrPut(ex.id) { mutableStateListOf() }
+                    val drafts = actual[ex.id] ?: mutableListOf()
                     Card {
                         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text(ex.exerciseName, style = MaterialTheme.typography.titleMedium)

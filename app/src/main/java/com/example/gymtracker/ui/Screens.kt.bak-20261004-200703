@@ -161,8 +161,6 @@ private fun SetDraftRow(
     onChange: (SetDraft) -> Unit,
     onDelete: (() -> Unit)?
 ) {
-    var repsText by remember { mutableStateOf(draft.reps.toString()) }
-    var weightText by remember { mutableStateOf(draft.weight.toString()) }
     Card {
         Row(
             modifier = Modifier.padding(12.dp),
