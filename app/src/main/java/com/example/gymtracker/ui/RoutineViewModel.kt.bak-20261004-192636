@@ -3,19 +3,11 @@ package com.example.gymtracker.ui
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.gymtracker.data.AppDatabase
-import com.example.gymtracker.data.Routine
-import com.example.gymtracker.data.RoutineExercise
-import com.example.gymtracker.data.RoutineWithExercises
-import com.example.gymtracker.data.ScheduleEntry
-import com.example.gymtracker.data.ScheduledRoutine
-import com.example.gymtracker.data.SetEntry
+import com.example.gymtracker.data.*
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-
-data class RunSetDraft(val reps: Int, val weight: Float)
 
 class RoutineViewModel(application: Application) : AndroidViewModel(application) {
     private val db = AppDatabase.getDatabase(application)
@@ -74,18 +66,13 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch { scheduleDao.clearDay(day) }
     }
 
-    fun logCompletedRoutine(
-        routine: RoutineWithExercises,
-        actual: Map<Long, List<RunSetDraft>>
-    ) {
+    fun logCompletedRoutine(routine: RoutineWithExercises, actual: Map<Long, Triple<Int, Int, Float>>) {
         viewModelScope.launch {
             routine.exercises.forEach { ex ->
-                val drafts = actual[ex.id] ?: return@forEach
-                if (drafts.isEmpty()) return@forEach
-                val sets = drafts.mapIndexed { i, d ->
-                    SetEntry(workoutId = 0, setIndex = i, reps = d.reps, weight = d.weight)
-                }
-                workoutDao.insertWorkoutWithSets(ex.exerciseName, sets)
+                val (s, r, w) = actual[ex.id] ?: Triple(ex.sets, ex.reps, ex.weight)
+                workoutDao.insert(
+                    Workout(exercise = ex.exerciseName, sets = s, reps = r, weight = w)
+                )
             }
         }
     }

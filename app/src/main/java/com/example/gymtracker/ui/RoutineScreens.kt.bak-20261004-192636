@@ -1,16 +1,6 @@
 package com.example.gymtracker.ui
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
@@ -19,28 +9,8 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.mutableStateMapOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
@@ -268,16 +238,14 @@ fun RunRoutineScreen(
     onBack: () -> Unit
 ) {
     var routine by remember { mutableStateOf<RoutineWithExercises?>(null) }
-    val actual = remember { mutableStateMapOf<Long, MutableList<RunSetDraft>>() }
+    val actual = remember { mutableStateMapOf<Long, Triple<Int, Int, Float>>() }
     var restSeconds by remember { mutableStateOf<Int?>(null) }
 
     LaunchedEffect(routineId) {
         viewModel.getRoutine(routineId) { r ->
             routine = r
             r.exercises.forEach { ex ->
-                actual[ex.id] = MutableList(ex.sets) {
-                    RunSetDraft(reps = ex.reps, weight = ex.weight)
-                }
+                actual[ex.id] = Triple(ex.sets, ex.reps, ex.weight)
             }
         }
     }
@@ -315,57 +283,28 @@ fun RunRoutineScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(r.exercises, key = { it.id }) { ex ->
-                    val drafts = actual[ex.id] ?: mutableListOf()
+                    val t = actual[ex.id] ?: Triple(ex.sets, ex.reps, ex.weight)
                     Card {
                         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text(ex.exerciseName, style = MaterialTheme.typography.titleMedium)
-                            Text("Rest ${ex.restSeconds}s",
+                            Text("Target: ${ex.sets}x${ex.reps} @ ${ex.weight} kg • Rest ${ex.restSeconds}s",
                                 style = MaterialTheme.typography.bodySmall)
-
-                            drafts.forEachIndexed { idx, draft ->
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    Text("${idx + 1}", modifier = Modifier.width(20.dp))
-                                    OutlinedTextField(
-                                        value = draft.reps.toString(),
-                                        onValueChange = {
-                                            drafts[idx] = draft.copy(reps = it.toIntOrNull() ?: 0)
-                                        },
-                                        label = { Text("Reps") },
-                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                    OutlinedTextField(
-                                        value = draft.weight.toString(),
-                                        onValueChange = {
-                                            drafts[idx] = draft.copy(weight = it.toFloatOrNull() ?: 0f)
-                                        },
-                                        label = { Text("kg") },
-                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                                        modifier = Modifier.weight(1f)
-                                    )
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                NumberField("Sets", t.first.toString(), Modifier.weight(1f)) {
+                                    actual[ex.id] = Triple(it.toIntOrNull() ?: 0, t.second, t.third)
+                                }
+                                NumberField("Reps", t.second.toString(), Modifier.weight(1f)) {
+                                    actual[ex.id] = Triple(t.first, it.toIntOrNull() ?: 0, t.third)
+                                }
+                                NumberField("Weight", t.third.toString(), Modifier.weight(1f)) {
+                                    actual[ex.id] = Triple(t.first, t.second, it.toFloatOrNull() ?: 0f)
                                 }
                             }
-
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                OutlinedButton(
-                                    onClick = {
-                                        val last = drafts.lastOrNull()
-                                            ?: RunSetDraft(ex.reps, ex.weight)
-                                        drafts.add(last.copy())
-                                    },
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Text("+ Set")
-                                }
-                                Button(
-                                    onClick = { restSeconds = ex.restSeconds },
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Text("Rest ${ex.restSeconds}s")
-                                }
+                            Button(
+                                onClick = { restSeconds = ex.restSeconds },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Start rest (${ex.restSeconds}s)")
                             }
                         }
                     }
@@ -374,7 +313,7 @@ fun RunRoutineScreen(
 
             Button(
                 onClick = {
-                    viewModel.logCompletedRoutine(r, actual.mapValues { it.value.toList() })
+                    viewModel.logCompletedRoutine(r, actual.toMap())
                     onBack()
                 },
                 modifier = Modifier.fillMaxWidth()

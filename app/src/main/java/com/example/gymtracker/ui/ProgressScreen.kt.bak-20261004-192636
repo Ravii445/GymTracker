@@ -1,31 +1,12 @@
 package com.example.gymtracker.ui
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.Card
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.example.gymtracker.data.Workout
 import java.util.Calendar
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -33,29 +14,32 @@ import java.util.Calendar
 fun ProgressScreen(viewModel: WorkoutViewModel) {
     val workouts by viewModel.workouts.collectAsState()
 
+    // Volume per day
     val volumeByDay = remember(workouts) {
-        workouts.groupBy { dayStart(it.workout.date) }
+        workouts.groupBy { dayStart(it.date) }
             .map { (day, list) ->
                 ChartPoint(
                     x = day,
-                    y = list.sumOf { it.totalVolume.toDouble() }.toFloat()
+                    y = list.sumOf { it.sets * it.reps * it.weight.toDouble() }.toFloat()
                 )
             }
             .sortedBy { it.x }
     }
 
-    val exercises = remember(workouts) {
-        workouts.map { it.workout.exercise }.distinct().sorted()
-    }
+    // Estimated 1RM progression per exercise
+    val exercises = remember(workouts) { workouts.map { it.exercise }.distinct().sorted() }
     var selectedExercise by remember { mutableStateOf(exercises.firstOrNull() ?: "") }
     LaunchedEffect(exercises) {
         if (selectedExercise !in exercises) selectedExercise = exercises.firstOrNull() ?: ""
     }
 
     val e1rm = remember(workouts, selectedExercise) {
-        workouts.filter { it.workout.exercise == selectedExercise }
-            .sortedBy { it.workout.date }
-            .map { w -> ChartPoint(x = w.workout.date, y = w.estimated1RM) }
+        workouts.filter { it.exercise == selectedExercise }
+            .sortedBy { it.date }
+            .map { w ->
+                val orm = w.weight * (1 + w.reps / 30f) // Epley
+                ChartPoint(x = w.date, y = orm)
+            }
     }
 
     Scaffold(topBar = { TopAppBar(title = { Text("Progress") }) }) { padding ->
@@ -110,22 +94,18 @@ fun ProgressScreen(viewModel: WorkoutViewModel) {
                         Text("Personal records",
                             style = MaterialTheme.typography.titleMedium)
                         Spacer(Modifier.height(8.dp))
-                        val prs = workouts.groupBy { it.workout.exercise }
-                            .mapValues { (_, list) ->
-                                val bestWorkout = list.maxByOrNull { it.topWeight }!!
-                                val topSet = bestWorkout.sets.maxByOrNull { it.weight }!!
-                                bestWorkout.workout.exercise to topSet
-                            }
+                        val prs = workouts.groupBy { it.exercise }
+                            .mapValues { (_, list) -> list.maxByOrNull { it.weight }!! }
                         if (prs.isEmpty()) {
                             Text("No records yet.")
                         } else {
-                            prs.forEach { (name, set) ->
+                            prs.forEach { (name, w) ->
                                 Row(
                                     Modifier.fillMaxWidth().padding(vertical = 4.dp),
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
                                     Text(name)
-                                    Text("${set.weight} kg x ${set.reps}")
+                                    Text("${w.weight} kg × ${w.reps}")
                                 }
                             }
                         }
@@ -138,6 +118,7 @@ fun ProgressScreen(viewModel: WorkoutViewModel) {
 
 @Composable
 private fun FlowRowSimple(items: List<String>, onSelect: (String) -> Unit) {
+    // Simple wrap using a Column of Rows in chunks of 3
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         items.chunked(3).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
