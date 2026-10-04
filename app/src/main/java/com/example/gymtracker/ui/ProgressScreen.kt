@@ -114,7 +114,7 @@ fun ProgressScreen(viewModel: WorkoutViewModel) {
                             .mapValues { (_, list) ->
                                 val bestWorkout = list.maxByOrNull { it.topWeight }!!
                                 val topSet = bestWorkout.sets.maxByOrNull { it.weight }!!
-                                bestWorkout.workout.exercise to topSet
+                                bestWorkout.sets.maxByOrNull { it.weight }!!
                             }
                         if (prs.isEmpty()) {
                             Text("No records yet.")
